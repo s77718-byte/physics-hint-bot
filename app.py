@@ -3,7 +3,6 @@ import streamlit as st
 from google import genai
 from google.genai import types
 
-# 페이지 설정
 st.set_page_config(
     page_title="역학적 에너지 보존 힌트 튜터",
     page_icon="🧪",
@@ -13,76 +12,55 @@ st.set_page_config(
 st.title("🧪 역학적 에너지 보존 법칙 - 힌트 튜터")
 st.caption("문제를 풀다 막힐 때 질문하세요! 정답 대신 핵심 힌트를 드릴게요.")
 
-# 1. API Key 불러오기 (Streamlit Secrets 우선 -> 환경변수)
-api_key = None
-if "GEMINI_API_KEY" in st.secrets:
-    api_key = st.secrets["GEMINI_API_KEY"]
-elif "GEMINI_API_KEY" in os.environ:
-    api_key = os.environ["GEMINI_API_KEY"]
+# API Key 로드
+api_key = st.secrets.get("GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
 
-# 만약 API Key가 설정되지 않은 경우 수동 입력창 표시
 if not api_key:
     with st.sidebar:
-        st.header("⚙️ 설정")
         api_key = st.text_input("Gemini API Key를 입력하세요", type="password")
 
 if not api_key:
-    st.info("👈 시작하려면 사이드바에 Gemini API Key를 입력하거나 Secrets 설정을 완료하세요.")
+    st.info("👈 설정이 완료되지 않았습니다. API Key를 확인해주세요.")
     st.stop()
 
-# Client 생성
 client = genai.Client(api_key=api_key)
 
-# 2. PDF 파일 로드 및 캐싱 (최초 1회만 읽어옴)
-@st.cache_resource
-def load_pdf_part():
-    pdf_path = "형성평가_역학적에너지보존법칙.pdf"
-    if os.path.exists(pdf_path):
-        with open(pdf_path, "rb") as f:
-            pdf_bytes = f.read()
-        return types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf")
-    else:
-        st.warning(f"⚠️ '{pdf_path}' 파일을 찾을 수 없습니다. PDF 없이 힌트 기능만 동작합니다.")
-        return None
-
-pdf_part = load_pdf_part()
-
-# 3. System Instruction 설정
+# 학습지 문제 정보를 텍스트로 내장하여 모바일 전송 속도를 극대화 (PDF 재전송 제거)
 SYSTEM_INSTRUCTION = """
 너는 중학교 3학년 과학 '역학적 에너지 보존 법칙' 단원의 친절하고 똑똑한 AI 튜터야.
-함께 첨부된 [형성평가_역학적에너지보존법칙.pdf] 문서를 참조해서 학생들의 질문에 대답해줘.
+학생들은 아래 학습지(형성 평가 문제)를 풀다가 너에게 질문할 거야.
+
+[학습지 문제 정보]
+- 01번: 역학적 에너지 정의 (위치에너지, 운동에너지, 마찰 없을 때 보존)[cite: 1]
+- 02번: 1m 관과 속력 측정기 A, B 쇠구슬 낙하 실험[cite: 1]
+- 03번: 2kg 물체를 5m 높이에서 가만히 떨어뜨림. 지면으로부터 2m 높이일 때 위치/운동/역학적 에너지 계산[cite: 1]
+- 04번: 연직 위로 던져 올린 공의 0.2초 간격 연속 사진[cite: 1]
+- 05번: 롤러코스터 A, B, C, D 지점 이동 시 에너지 전환[cite: 1]
+- 06번: 반원형 그릇 속 공의 왕복 운동 (A, B, C 지점)[cite: 1]
+- 서술형 07번: 20m 높이에서 3kg 공 낙하, 5m 높이 지날 때 위치 에너지와 운동 에너지의 비[cite: 1]
+- 서술형 08번: A지점에서 20cm 간격 속력 측정기 B, C, D 설치 후 낙하, 속도 제곱의 비[cite: 1]
+- 서술형 09번: 공을 연직 위로 던져 올렸다 돌아올 때 역학적 에너지 전환 과정[cite: 1]
 
 [핵심 규칙]
-1. 절대로 문제의 최종 정답(예: "답은 3번이야", "값은 58.8 J이야")을 직접 알려주지 마.
-2. 학생이 특정 문제(예: 1번, 3번, 서술형 7번 등)에 대해 질문하면, 먼저 PDF 상의 해당 문제가 묻고 있는 핵심 개념이나 조건을 확인하고 질문을 던져줘.
-3. 위치 에너지 공식($9.8 \\times m \\times h$), 운동 에너지 공식($\\frac{1}{2}mv^2$), 역학적 에너지 보존 법칙($E_{역학} = E_{위치} + E_{운동}$) 등을 이용해 단계적으로 유도해줘.
-4. 말투는 친절하고 격려하는 중학교 선생님 어조(~해요, ~해볼까요?)를 사용해.
-5. 학생이 잘못된 개념이나 계산 결과를 말하면 어디서 오해가 생겼는지 되짚어줄 수 있는 힌트를 줘.
+1. 절대로 최종 정답(예: "답은 3번이야", "58.8 J이야")을 직접 알려주지 마.
+2. 학생이 질문한 문제의 핵심 개념이나 공식을 떠올릴 수 있도록 힌트성 질문을 던져줘.
+3. 위치 에너지($9.8 \\times m \\times h$), 운동 에너지($\\frac{1}{2}mv^2$), 역학적 에너지 보존($E_{역학} = E_{위치} + E_{운동}$) 공식으로 유도해줘.
+4. 친절하고 격려하는 어조(~해요, ~해볼까요?)를 사용해.
 """
 
-# 4. 대화 이력 관리
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 이전 대화 내용 표시
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# 5. 사용자 입력 받기
-if prompt := st.chat_input("질문하고 싶은 문제 번호나 내용을 입력하세요 (예: 3번 문제 힌트 줘)"):
-    # 사용자 메시지 화면 출력 및 저장
+if prompt := st.chat_input("질문할 문제 번호를 입력하세요 (예: 3번 문제 힌트 줘)"):
     st.chat_message("user").write(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # Gemini에 전달할 컨텐츠 생성 (PDF 파일 전달 포함)
+    # 순수 텍스트 대화 내용만 전송 (가볍고 빠르게 처리)
     contents = []
-    
-    # PDF가 있는 경우 첫 요청 컨텐츠에 PDF 포함
-    if pdf_part:
-        contents.append(pdf_part)
-
-    # 대화 기록 추가
     for msg in st.session_state.messages:
         role = "user" if msg["role"] == "user" else "model"
         contents.append(
@@ -92,7 +70,6 @@ if prompt := st.chat_input("질문하고 싶은 문제 번호나 내용을 입�
             )
         )
 
-    # 답변 생성 요청
     with st.chat_message("assistant"):
         try:
             response = client.models.generate_content(
