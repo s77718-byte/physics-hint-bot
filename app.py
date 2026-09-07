@@ -109,10 +109,11 @@ if prompt := st.chat_input("예: 2번 문제 3번 보기가 왜 틀렸는지 힌
             )
         )
 
-    with st.chat_message("assistant"):
+   with st.chat_message("assistant"):
         try:
+            # 1차 시도: gemini-2.5-flash
             response = client.models.generate_content(
-                model="gemini-3.6-flash",
+                model="gemini-2.5-flash",
                 contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_INSTRUCTION,
@@ -120,7 +121,20 @@ if prompt := st.chat_input("예: 2번 문제 3번 보기가 왜 틀렸는지 힌
                 )
             )
             bot_reply = response.text
-            st.markdown(bot_reply)
-            st.session_state.messages.append({"role": "assistant", "content": bot_reply})
         except Exception as e:
-            st.error(f"오류가 발생했습니다: {e}")
+            # 503 에러 등 발생 시 2차 시도: gemini-2.0-flash로 자동 우회
+            try:
+                response = client.models.generate_content(
+                    model="gemini-2.0-flash",
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        temperature=0.3
+                    )
+                )
+                bot_reply = response.text
+            except Exception as e2:
+                bot_reply = "⚠️ 현재 구글 서버에 접속자가 많아 응답이 지연되고 있습니다. 잠시 후 다시 질문해 주세요!"
+
+        st.markdown(bot_reply)
+        st.session_state.messages.append({"role": "assistant", "content": bot_reply})
