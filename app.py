@@ -25,7 +25,7 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
-# PDF의 모든 문제, 보기, 세부 내용을 내장한 시스템 프롬프트 (속도 최적화 및 세부 답변 완벽 지원)
+# PDF 문제/보기 전체 내용을 내장한 시스템 프롬프트
 SYSTEM_INSTRUCTION = """
 너는 중학교 3학년 과학 '역학적 에너지 보존 법칙' 단원의 친절하고 똑똑한 AI 튜터야.
 학생들은 아래 [형성 평가 문제] 학습지를 풀다가 특정 문제나 특정 보기(선지)에 대해 질문할 거야.
@@ -109,7 +109,7 @@ if prompt := st.chat_input("예: 2번 문제 3번 보기가 왜 틀렸는지 힌
             )
         )
 
-   with st.chat_message("assistant"):
+    with st.chat_message("assistant"):
         try:
             # 1차 시도: gemini-2.5-flash
             response = client.models.generate_content(
@@ -122,7 +122,7 @@ if prompt := st.chat_input("예: 2번 문제 3번 보기가 왜 틀렸는지 힌
             )
             bot_reply = response.text
         except Exception as e:
-            # 503 에러 등 발생 시 2차 시도: gemini-2.0-flash로 자동 우회
+            # 과부하 시 2차 시도: gemini-2.0-flash 우회
             try:
                 response = client.models.generate_content(
                     model="gemini-2.0-flash",
